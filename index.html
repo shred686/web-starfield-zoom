@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ontos Cosmos</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #000;
+      color: white;
+      font-family: Arial, sans-serif;
+      overflow-x: hidden;
+      text-align: center;
+    }
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: -1;
+    }
+    .hero {
+      height: 250vh; /* 175 = Approximately 3/4 page scroll assuming viewport ~100vh */
+      position: relative;
+    }
+    .hero-text {
+      position: sticky;
+      top: 35vh;
+      text-align: center;
+      /* font-size: 4em; */
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+    .content {
+      padding: 50px;
+      background-color: rgba(0, 0, 0, 0.7); /* Darker semi-transparent for space theme */
+      min-height: 40vh;
+    }
+    h1 {
+      font-size: 3vw
+    }
+  </style>
+</head>
+<body>
+  <canvas id="outerspace"></canvas>
+  <section class="hero">
+    <!-- <h1 class="hero-text">Ontos Cosmos</h1> -->
+  </section>
+  <section class="content">
+    <h1>Welcome to Ontos Cosmos</h1>
+    <h2>Platform for exploring the Ontology cosmos. </h2>
+    <p>Site Content Here</p>
+    <!-- Add more HTML content as needed -->
+  </section>
+  <script>
+    let outerspace = document.querySelector("#outerspace");
+    let mainContext = outerspace.getContext('2d');
+
+    let canvasWidth = window.innerWidth;
+    let canvasHeight = window.innerHeight;
+    outerspace.width = canvasWidth;
+    outerspace.height = canvasHeight;
+
+    let centerX = canvasWidth * 0.5;
+    let centerY = canvasHeight * 0.5;
+
+    const focal = 1750; // User-adjusted
+    const maxZ = 7000; // User-adjusted
+    const numberOfStars = 3000; // User-adjusted
+    const numberOfClouds = 200; // User-adjusted
+    const zoomSpeed = 1.5; // User-adjusted
+    const easingFactor = .09; // Controls smoothness/damping (0.05-0.2 range for fluid feel)
+    const motionThreshold = .1; // Threshold to consider camera as stopped
+
+    // Configurable hue parameters for stars
+    const starHueCenter = 50; // Hue for central stars (e.g., 0 for red/orange, 200 for blue)
+    const starHueOuter = 50; // Hue for outer stars (e.g., 240 for blue/purple, 30 for yellow/orange)
+
+    // New configurable saturation for stars
+    const starSaturationMin = 10; // Min saturation for stars (0-100; lower for grayer/more muted colors)
+    const starSaturationMax = 10; // Max saturation for stars (higher for more vibrant colors)
+
+    // Configurable hue parameters for clouds (nebula/fog)
+    const cloudHueCenter = 200; // Hue for central clouds (e.g., 0 for red/orange)
+    const cloudHueOuter = 260; // Hue for outer clouds (e.g., 240 for blue/purple; try 200-280 for more blues/purples)
+
+    // Additional nebula tweaks: Increase cloud count, alpha for density; add variance for depth
+    const cloudAlphaMin = 0.005; // Min opacity for clouds (lower for subtler fog)
+    const cloudAlphaMax = 0.1; // Max opacity (higher for denser nebula)
+    const cloudSaturationMin = 10; // Min saturation for clouds (lower for grayer fog)
+    const cloudSaturationMax = 80; // Max saturation (higher for vibrant blues/purples)
+    const cloudLightnessMin = 10; // Min lightness (darker for depth)
+    const cloudLightnessMax = 50; // Max lightness (brighter for highlights)
+    const cloudRadiusMaxMin = 10; // Min max-radius for clouds (smaller for finer dust)
+    const cloudRadiusMaxMax = 250; // Max max-radius (larger for bigger nebula blobs)
+
+    let stars = [];
+    let clouds = [];
+    let targetCameraZ = 0;
+    let currentCameraZ = 0;
+    let isAnimating = false;
+
+    function gaussianRandom(mean = 0, stdev = 0.3) {
+      let u = 1 - Math.random();
+      let v = Math.random();
+      let z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+      return z * stdev + mean;
+    }
+
+    class Star {
+      constructor() {
+        this.x = gaussianRandom(0, 0.3); // Tighter cluster
+        this.y = gaussianRandom(0, 0.3);
+        this.z = Math.random() * maxZ;
+        this.radiusMax = 0.025 + Math.random() * .4; // Slightly smaller
+        const dist = Math.sqrt(this.x * this.x + this.y * this.y);
+        this.hue = remap(dist, 0, 1, starHueCenter, starHueOuter); // Use configurable hues
+        this.saturation = starSaturationMin + Math.random() * (starSaturationMax - starSaturationMin); // Use configurable saturation range
+        this.lightness = 70 + Math.random() * 30;
+        this.flareActive = false;
+        this.flareDuration = 0;
+      }
+
+      draw(cameraZ) {
+        let effectiveZ = this.z - cameraZ;
+
+        if (effectiveZ <= 0.1) {
+          this.z += maxZ;
+          effectiveZ += maxZ;
+        } else if (effectiveZ > maxZ) {
+          this.z -= maxZ;
+          effectiveZ -= maxZ;
+        }
+
+        let scale = focal / effectiveZ;
+        let starX = centerX + this.x * scale * centerX;
+        let starY = centerY + this.y * scale * centerY;
+
+        let radius = scale * this.radiusMax;
+
+        if (starX < 0 || starX > canvasWidth || starY < 0 || starY > canvasHeight || radius < 0.05) return;
+
+        // Draw main star with 3D gradient for depth when close
+        mainContext.shadowBlur = 0;
+        mainContext.beginPath();
+        mainContext.arc(starX, starY, radius, 0, Math.PI * 2, false);
+        mainContext.closePath();
+
+        if (radius > 2) { // Apply 3D shading only for close stars
+          const gradient = mainContext.createRadialGradient(
+            starX - radius * 0.3, // Offset for "light source" effect
+            starY - radius * 0.3,
+            0,
+            starX,
+            starY,
+            radius
+          );
+          gradient.addColorStop(0, `hsl(${this.hue}, ${this.saturation}%, 100%)`); // Bright center/highlight
+          gradient.addColorStop(0.4, `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`); // Mid tone
+          gradient.addColorStop(1, `hsl(${this.hue}, ${this.saturation}%, 40%)`); // Darker edge for depth
+          mainContext.fillStyle = gradient;
+        } else {
+          mainContext.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
+        }
+        mainContext.fill();
+
+        // Handle lens flare persistence only if camera is moving
+        if (Math.abs(targetCameraZ - currentCameraZ) > motionThreshold && radius > 5) {
+          if (!this.flareActive && Math.random() < 0.005) {
+            this.flareActive = true;
+            this.flareDuration = Math.floor(Math.random() * 4) + 2; // 2-5 scrolls
+          }
+        }
+
+        if (this.flareActive) {
+          this.drawLensFlare(starX, starY, radius);
+          this.flareDuration--;
+          if (this.flareDuration <= 0) {
+            this.flareActive = false;
+          }
+        }
+      }
+
+      drawLensFlare(x, y, r) {
+        // Simple lens flare: halo + streak
+        // Halo: larger semi-transparent circle
+        const haloRadius = r * 5;
+        const haloGradient = mainContext.createRadialGradient(x, y, 0, x, y, haloRadius);
+        haloGradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.3)`);
+        haloGradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0)`);
+
+        mainContext.beginPath();
+        mainContext.arc(x, y, haloRadius, 0, Math.PI * 2, false);
+        mainContext.closePath();
+        mainContext.fillStyle = haloGradient;
+        mainContext.fill();
+
+        // Streak: horizontal line with gradient
+        const streakLength = r * 20;
+        const streakGradient = mainContext.createLinearGradient(x - streakLength / 2, y, x + streakLength / 2, y);
+        streakGradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0)`);
+        streakGradient.addColorStop(0.5, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.2)`);
+        streakGradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0)`);
+
+        mainContext.strokeStyle = streakGradient;
+        mainContext.lineWidth = r * 0.5;
+        mainContext.beginPath();
+        mainContext.moveTo(x - streakLength / 2, y);
+        mainContext.lineTo(x + streakLength / 2, y);
+        mainContext.stroke();
+      }
+    }
+
+    class Cloud {
+      constructor() {
+        this.x = gaussianRandom(0, 0.4); // Wider for clouds
+        this.y = gaussianRandom(0, 0.4);
+        this.z = Math.random() * maxZ;
+        this.radiusMax = cloudRadiusMaxMin + Math.random() * (cloudRadiusMaxMax - cloudRadiusMaxMin); // Varied size for depth
+        const dist = Math.sqrt(this.x * this.x + this.y * this.y);
+        this.hue = remap(dist, 0, 1, cloudHueCenter, cloudHueOuter); // Use configurable hues
+        this.saturation = cloudSaturationMin + Math.random() * (cloudSaturationMax - cloudSaturationMin); // Varied for blues/purples
+        this.lightness = cloudLightnessMin + Math.random() * (cloudLightnessMax - cloudLightnessMin);
+        this.alpha = cloudAlphaMin + Math.random() * (cloudAlphaMax - cloudAlphaMin); // Varied opacity for fog density
+      }
+
+      draw(cameraZ) {
+        let effectiveZ = this.z - cameraZ;
+
+        if (effectiveZ <= 0.1) {
+          this.z += maxZ;
+          effectiveZ += maxZ;
+        } else if (effectiveZ > maxZ) {
+          this.z -= maxZ;
+          effectiveZ -= maxZ;
+        }
+
+        let scale = focal / effectiveZ;
+        let cloudX = centerX + this.x * scale * centerX;
+        let cloudY = centerY + this.y * scale * centerY;
+
+        let radius = scale * this.radiusMax;
+
+        if (cloudX < -radius || cloudX > canvasWidth + radius || cloudY < -radius || cloudY > canvasHeight + radius) return;
+
+        mainContext.shadowBlur = radius * 2; // Stronger blur for cloudy effect
+        mainContext.shadowColor = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${this.alpha})`;
+
+        const gradient = mainContext.createRadialGradient(cloudX, cloudY, 0, cloudX, cloudY, radius);
+        gradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${this.alpha})`);
+        gradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0)`);
+
+        mainContext.beginPath();
+        mainContext.arc(cloudX, cloudY, radius, 0, Math.PI * 2, false);
+        mainContext.closePath();
+
+        mainContext.fillStyle = gradient;
+        mainContext.fill();
+      }
+    }
+
+    function setup() {
+      stars = [];
+      for (let i = 0; i < numberOfStars; i++) {
+        stars.push(new Star());
+      }
+      clouds = [];
+      for (let i = 0; i < numberOfClouds; i++) {
+        clouds.push(new Cloud());
+      }
+      render(); // Initial render after setup
+    }
+    setup();
+
+    function render() {
+      mainContext.clearRect(0, 0, canvasWidth, canvasHeight);
+      mainContext.fillStyle = "#000";
+      mainContext.fillRect(0, 0, canvasWidth, canvasHeight);
+
+      currentCameraZ += (targetCameraZ - currentCameraZ) * easingFactor;
+
+      // Draw clouds first for background layer
+      for (let i = 0; i < clouds.length; i++) {
+        clouds[i].draw(currentCameraZ);
+      }
+
+      // Then stars on top
+      for (let i = 0; i < stars.length; i++) {
+        stars[i].draw(currentCameraZ);
+      }
+    }
+
+    // Animation loop for smooth rendering during motion
+    function animate() {
+      render();
+      if (Math.abs(targetCameraZ - currentCameraZ) > motionThreshold) {
+        requestAnimationFrame(animate);
+      } else {
+        isAnimating = false;
+      }
+    }
+
+    // Update target on scroll and start animation if needed
+    window.addEventListener('scroll', () => {
+      targetCameraZ = window.scrollY * zoomSpeed;
+      if (!isAnimating) {
+        isAnimating = true;
+        animate();
+      }
+    }, { passive: true });
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      canvasWidth = window.innerWidth;
+      canvasHeight = window.innerHeight;
+      outerspace.width = canvasWidth;
+      outerspace.height = canvasHeight;
+      centerX = canvasWidth * 0.5;
+      centerY = canvasHeight * 0.5;
+      setup();
+    });
+
+    function remap(value, inMin, inMax, outMin, outMax) {
+      return outMin + (outMax - outMin) * (value - inMin) / (inMax - inMin);
+    }
+  </script>
+</body>
+</html>
