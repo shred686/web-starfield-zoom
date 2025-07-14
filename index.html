@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background-color: #000;
+      background-color: #000000;
       color: white;
       font-family: Arial, sans-serif;
       overflow-x: hidden;
@@ -23,34 +23,76 @@
       height: 250vh; /* 175 = Approximately 3/4 page scroll assuming viewport ~100vh */
       position: relative;
     }
-    .hero-text {
-      position: sticky;
-      top: 35vh;
-      text-align: center;
-      /* font-size: 4em; */
-      text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-    }
     .content {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
       padding: 50px;
-      background-color: rgba(0, 0, 0, 0.7); /* Darker semi-transparent for space theme */
-      min-height: 40vh;
+      background-color: transparent; /* No background */
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
     }
-    h1 {
-      font-size: 3vw
+    .content h1 {
+      font-size: 5vw;
+      opacity: 0;
+      margin: 0;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+      mix-blend-mode: difference;
+      color: white;
+    }
+    .content h2 {
+      font-size: 2.5vw;
+      opacity: 0;
+      margin: 10px 0;
+      text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+      transition: opacity 1s ease-in-out;
+    }
+    .content p {
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+    }
+    .scroll-indicator {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      cursor: pointer;
+      z-index: 2;
+      font-size: 5em;
+      transition: opacity 1.5s ease;
+      opacity: 0;
+    }
+    .scroll-indicator p {
+      margin: 0;
+      font-size: 1em;
+    }
+    .scroll-indicator span {
+      display: block;
+      font-size: 1em;
+      line-height: 1;
     }
   </style>
 </head>
 <body>
   <canvas id="outerspace"></canvas>
   <section class="hero">
-    <!-- <h1 class="hero-text">Ontos Cosmos</h1> -->
+    <!-- Empty for scroll height -->
   </section>
   <section class="content">
-    <h1>Welcome to Ontos Cosmos</h1>
-    <h2>Platform for exploring the Ontology cosmos. </h2>
-    <p>Site Content Here</p>
-    <!-- Add more HTML content as needed -->
+    <h1>Ontos Cosmos</h1>
+    <h2>Platform for exploring the Ontology cosmos.</h2>
   </section>
+  <div class="scroll-indicator" id="scrollIndicator">
+    <p>Scroll</p>
+    <span>↓</span>
+  </div>
   <script>
     let outerspace = document.querySelector("#outerspace");
     let mainContext = outerspace.getContext('2d');
@@ -60,38 +102,38 @@
     outerspace.width = canvasWidth;
     outerspace.height = canvasHeight;
 
-    let centerX = canvasWidth * 0.5;
-    let centerY = canvasHeight * 0.5;
+    let centerX = canvasWidth * .5;
+    let centerY = canvasHeight * .5;
 
-    const focal = 1750; // User-adjusted
-    const maxZ = 7000; // User-adjusted
-    const numberOfStars = 3000; // User-adjusted
-    const numberOfClouds = 200; // User-adjusted
+    const focal = 750; // User-adjusted
+    const maxZ = 4000; // User-adjusted
+    const numberOfStars = 4000; // User-adjusted
+    const numberOfClouds = 100; // User-adjusted
     const zoomSpeed = 1.5; // User-adjusted
     const easingFactor = .09; // Controls smoothness/damping (0.05-0.2 range for fluid feel)
     const motionThreshold = .1; // Threshold to consider camera as stopped
 
     // Configurable hue parameters for stars
-    const starHueCenter = 50; // Hue for central stars (e.g., 0 for red/orange, 200 for blue)
+    const starHueCenter = 40; // Hue for central stars (e.g., 0 for red/orange, 200 for blue)
     const starHueOuter = 50; // Hue for outer stars (e.g., 240 for blue/purple, 30 for yellow/orange)
 
     // New configurable saturation for stars
-    const starSaturationMin = 10; // Min saturation for stars (0-100; lower for grayer/more muted colors)
-    const starSaturationMax = 10; // Max saturation for stars (higher for more vibrant colors)
+    const starSaturationMin = 10; // Min saturation for stars (lower for grayer/more muted colors)
+    const starSaturationMax = 50; // Max saturation for stars (higher for more vibrant colors)
 
     // Configurable hue parameters for clouds (nebula/fog)
-    const cloudHueCenter = 200; // Hue for central clouds (e.g., 0 for red/orange)
-    const cloudHueOuter = 260; // Hue for outer clouds (e.g., 240 for blue/purple; try 200-280 for more blues/purples)
+    const cloudHueCenter = 240; // Hue for central clouds (e.g., 0 for red/orange)
+    const cloudHueOuter = 270; // Hue for outer clouds (e.g., 240 for blue/purple; try 200-280 for more blues/purples)
 
     // Additional nebula tweaks: Increase cloud count, alpha for density; add variance for depth
     const cloudAlphaMin = 0.005; // Min opacity for clouds (lower for subtler fog)
-    const cloudAlphaMax = 0.1; // Max opacity (higher for denser nebula)
+    const cloudAlphaMax = 0.2; // Max opacity (higher for denser nebula)
     const cloudSaturationMin = 10; // Min saturation for clouds (lower for grayer fog)
-    const cloudSaturationMax = 80; // Max saturation (higher for vibrant blues/purples)
+    const cloudSaturationMax = 50; // Max saturation for vibrant blues/purples
     const cloudLightnessMin = 10; // Min lightness (darker for depth)
-    const cloudLightnessMax = 50; // Max lightness (brighter for highlights)
-    const cloudRadiusMaxMin = 10; // Min max-radius for clouds (smaller for finer dust)
-    const cloudRadiusMaxMax = 250; // Max max-radius (larger for bigger nebula blobs)
+    const cloudLightnessMax = 75; // Max lightness (brighter for highlights)
+    const cloudRadiusMaxMin = 100; // Min max-radius for clouds (smaller for finer dust)
+    const cloudRadiusMaxMax = 400; // Max max-radius (larger for bigger nebula blobs)
 
     let stars = [];
     let clouds = [];
@@ -111,13 +153,11 @@
         this.x = gaussianRandom(0, 0.3); // Tighter cluster
         this.y = gaussianRandom(0, 0.3);
         this.z = Math.random() * maxZ;
-        this.radiusMax = 0.025 + Math.random() * .4; // Slightly smaller
+        this.radiusMax = 0.025 + Math.random() * .6; // Slightly smaller
         const dist = Math.sqrt(this.x * this.x + this.y * this.y);
         this.hue = remap(dist, 0, 1, starHueCenter, starHueOuter); // Use configurable hues
         this.saturation = starSaturationMin + Math.random() * (starSaturationMax - starSaturationMin); // Use configurable saturation range
         this.lightness = 70 + Math.random() * 30;
-        this.flareActive = false;
-        this.flareDuration = 0;
       }
 
       draw(cameraZ) {
@@ -163,51 +203,8 @@
         }
         mainContext.fill();
 
-        // Handle lens flare persistence only if camera is moving
-        if (Math.abs(targetCameraZ - currentCameraZ) > motionThreshold && radius > 5) {
-          if (!this.flareActive && Math.random() < 0.005) {
-            this.flareActive = true;
-            this.flareDuration = Math.floor(Math.random() * 4) + 2; // 2-5 scrolls
-          }
-        }
-
-        if (this.flareActive) {
-          this.drawLensFlare(starX, starY, radius);
-          this.flareDuration--;
-          if (this.flareDuration <= 0) {
-            this.flareActive = false;
-          }
-        }
       }
 
-      drawLensFlare(x, y, r) {
-        // Simple lens flare: halo + streak
-        // Halo: larger semi-transparent circle
-        const haloRadius = r * 5;
-        const haloGradient = mainContext.createRadialGradient(x, y, 0, x, y, haloRadius);
-        haloGradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.3)`);
-        haloGradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0)`);
-
-        mainContext.beginPath();
-        mainContext.arc(x, y, haloRadius, 0, Math.PI * 2, false);
-        mainContext.closePath();
-        mainContext.fillStyle = haloGradient;
-        mainContext.fill();
-
-        // Streak: horizontal line with gradient
-        const streakLength = r * 20;
-        const streakGradient = mainContext.createLinearGradient(x - streakLength / 2, y, x + streakLength / 2, y);
-        streakGradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0)`);
-        streakGradient.addColorStop(0.5, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.2)`);
-        streakGradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0)`);
-
-        mainContext.strokeStyle = streakGradient;
-        mainContext.lineWidth = r * 0.5;
-        mainContext.beginPath();
-        mainContext.moveTo(x - streakLength / 2, y);
-        mainContext.lineTo(x + streakLength / 2, y);
-        mainContext.stroke();
-      }
     }
 
     class Cloud {
@@ -299,12 +296,55 @@
       }
     }
 
+    const contentElement = document.querySelector('.content');
+    const contentTitle = document.querySelector('.content h1');
+    const contentSubtitle = document.querySelector('.content h2');
+    const contentBody = document.querySelector('.content p');
+
+    let scrollTimeout;
+    let hasReachedEnd = false;
+
+    function checkIfStoppedAtBottom() {
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      if (window.scrollY >= maxScroll - 1) { // Tolerance for floating point
+        contentSubtitle.style.opacity = 1;
+        contentBody.style.opacity = 1;
+      }
+    }
+
     // Update target on scroll and start animation if needed
     window.addEventListener('scroll', () => {
       targetCameraZ = window.scrollY * zoomSpeed;
       if (!isAnimating) {
         isAnimating = true;
         animate();
+      }
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      const scrollY = window.scrollY;
+      const progress = scrollY / maxScroll;
+
+      if (scrollY >= maxScroll - 1) {
+        hasReachedEnd = true;
+      }
+
+      // Hero title fade (starts at 75%)
+      const titleFadeStart = 0.75;
+      let titleOpacity = 0;
+      if (hasReachedEnd) {
+        titleOpacity = 1;
+      } else {
+        if (progress >= titleFadeStart) {
+          titleOpacity = Math.min(1, (progress - titleFadeStart) / (1 - titleFadeStart));
+        }
+      }
+      contentTitle.style.opacity = titleOpacity;
+
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(checkIfStoppedAtBottom, 200); // 200ms after scroll stops
+
+      // Hide scroll indicator on scroll start
+      if (scrollY > 0) {
+        scrollIndicator.style.opacity = 0;
       }
     }, { passive: true });
 
@@ -314,14 +354,28 @@
       canvasHeight = window.innerHeight;
       outerspace.width = canvasWidth;
       outerspace.height = canvasHeight;
-      centerX = canvasWidth * 0.5;
-      centerY = canvasHeight * 0.5;
       setup();
     });
 
     function remap(value, inMin, inMax, outMin, outMax) {
       return outMin + (outMax - outMin) * (value - inMin) / (inMax - inMin);
     }
+
+    // Scroll indicator click handler
+    const scrollIndicator = document.getElementById('scrollIndicator');
+    scrollIndicator.addEventListener('click', (e) => {
+      e.preventDefault();
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      window.scrollTo({
+        top: maxScroll,
+        behavior: 'smooth'
+      });
+    });
+
+    // Fade in scroll indicator after 3 seconds
+    setTimeout(() => {
+      scrollIndicator.style.opacity = 0.3;
+    }, 1500);
   </script>
 </body>
 </html>
